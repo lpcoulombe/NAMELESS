@@ -1,0 +1,19 @@
+# example yaml config file to perform a NAMELESS reduction
+
+observations:
+    obs_folder: 'WASP_39b_NIRISS' # folder that contains the .uncal files of interest
+    red_folder:                   # folder that contains reduction imputs, leave empty for default
+    nseg:                         # number of data segments, leave empty to reduce all
+    segs:                         # set of segments to analyze, leave empty to reduce all
+    
+    
+stages: 
+    run_s1: true   # Stage 1 steps of the jwst pipeline 
+    run_s2: true   # Stage 2 steps of the jwst pipeline
+    run_prep: true # Preparatory steps before custom corrections
+    run_cst: true  # Custom NAMELESS corrections
+    run_ext: true  # 2D light curve extraction
+    
+
+    
+
