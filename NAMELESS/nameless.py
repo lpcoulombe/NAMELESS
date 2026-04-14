@@ -22,6 +22,8 @@ import pdb
 import time
 import glob
 
+from stpipe import datamodel
+
 import NAMELESS.run_jwst_steps as run_jwst
 
 from jwst import datamodels
@@ -173,12 +175,14 @@ class nameless(object):
             self.cosmic_rays()
             
             self.oneoverf()
+
+            # save cleaned segments on disk
+            self.saveclean()
             
         # running the spectral extraction step and saving the light curves
         if run_ext:
             self.extraction()
-            
-        
+
         
     # steps to prepare for the NAMELESS custom reduction steps
     #TODO includes:
@@ -271,7 +275,32 @@ class nameless(object):
                   
         return data, err, dq, t_int, pwcpos
         #TODO: pwcpos and other important infos could be stored earlier on, to think about
-    
+
+    # function that takes the cleaned data (after custom steps) and puts them back into
+    # its constituent segments before saving as jwst datamodels on disk
+    def saveclean(self):
+        direc = self.s2_red_dir
+        filetype = 'sourcetypestep'
+        cleandirec = self.cst_dir
+        cleanfiletype = 'clean'
+
+        for i, seg in enumerate(self.segs):
+            # Read the saved file after s2 to get the segment size and metadata right
+            # TODO: assuming for now that this is used to collate files after s2, make it more flexible
+            data_file = direc + '/' + self.obs_handle + '-seg' + seg + '_nis_1_' + filetype + '.fits'
+            dm = datamodels.open(data_file)
+            # the starting and ending integrations for that segment
+            istart = dm.meta.exposure.integration_start
+            iend = dm.meta.exposure.integration_end
+            # replace the datamodel content by the values from cst
+            dm.data = np.copy(self.data_cst[istart-1:iend])
+            dm.err = np.copy(self.err_cst[istart-1:iend])
+            dm.dq = np.copy(self.dq_cst[istart-1:iend])
+            # save on disk in the cst directory with clean file name
+            dm.save(cleandirec + '/' + self.obs_handle + '-seg' + seg + '_nis_1_' + cleanfiletype + '.fits')
+
+        return
+
     
     # function that calls pastasoss to get wavelength solution and trace position
     def get_wave_sol(self,xmin_o2=750):
@@ -549,22 +578,22 @@ class nameless(object):
             
 
     def oneoverf(self,ap=30,median_ints=np.arange(0,200),plotting=True,dpi=300):
-        
+
         #TODO: clean up this function
-        
+
         #TODO: add option to consider a different median stack as a function of time (in case of tilt event)
-        
+
         med_stack = np.nanmedian(self.data_cst[median_ints],axis=0)[np.newaxis]
-        
+
         #TODO: fix so that we also have err_cst and dq_cst values
         data, err, dq = np.copy(self.data_cst), np.copy(self.err_s2), np.copy(self.dq_s2)
-        
+
         err[dq!=0]         = np.inf # setting all errors of pixels with non zero dq flags to infinity
         err[np.isnan(err)] = np.inf # setting error values that are nan or 0 to infinity
         err[err==0]        = np.inf
 
-        err2 = np.copy(err)        
-        
+        err2 = np.copy(err)
+
         # setting error of pixels >ap from the order 1 center to infinity
         x1,y1 = self.trace1
         
