@@ -38,9 +38,19 @@ def main():
     reduc.config = config
 
     stages = config['stages']
+    
+    s1_settings = config['s1_settings']
+    s2_settings = config['s2_settings']
+    
+    prep_settings = config['prep_settings']
+    cst_settings  = config['cst_settings']
+    ext_settings  = config['ext_settings']
+    
     reduc.run_reduction(run_s1=stages['run_s1'],run_s2=stages['run_s2'],
                         run_prep=stages['run_prep'],run_cst=stages['run_cst'],
-                        run_ext=stages['run_ext'])
+                        run_ext=stages['run_ext'],s1_settings=s1_settings,
+                        s2_settings=s2_settings,prep_settings=prep_settings,
+                        cst_settings=cst_settings,ext_settings=ext_settings)
     
     
     print('Reduction complete!')
@@ -48,12 +58,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-pdb.set_trace()
-
-'''
-# reduction object
-
-reduc = nameless.nameless(obs_folder='WASP_39b_NIRISS')
-
-reduc.run_reduction(run_s1=False,run_s2=False)
-'''

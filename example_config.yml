@@ -8,12 +8,99 @@ observations:
     
     
 stages: 
-    run_s1: true   # Stage 1 steps of the jwst pipeline 
-    run_s2: true   # Stage 2 steps of the jwst pipeline
-    run_prep: true # Preparatory steps before custom corrections
-    run_cst: true  # Custom NAMELESS corrections
-    run_ext: true  # 2D light curve extraction
+    run_s1:   false   # Stage 1 steps of the jwst pipeline 
+    run_s2:   false   # Stage 2 steps of the jwst pipeline
+    run_prep: true   # Preparatory steps before custom corrections
+    run_cst:  true   # Custom NAMELESS corrections
+    run_ext:  true   # 2D light curve extraction
     
 
+s1_settings:
+    save_gs:   false  # Save output after group scale step 
+    save_dq:   false  # Save output after data quality step 
+    save_sat:  false  # Save output after saturation step 
+    save_sb:   false  # Save output after superbias step 
+    save_rp:   false  # Save output after pixel correction step 
+    save_lin:  false  # Save output after linearity step 
+    save_dc:   false  # Save output after dark current step 
+    save_jd:   false  # Save output after jump detection step 
+    save_rf:   true   # Save output after ramp fitting step 
+    save_gain: false  # Save output after gain scaling step 
+
+    skip_dc:   true   # Skip dark current step 
+    skip_jd:   false  # Skip jump detection step  
+    skip_gain: true   # Skip gain scaling step 
     
+    
+s2_settings:
+    save_wcs: false  # Save output after worlds coordinate system step 
+    save_ff:  false  # Save output after flatfield step 
+    save_st:  true   # Save output after source type step 
+    
+    
+prep_settings:
+    wlc_pixs: [[1250,1750],[40,70]] # Pixels used to compute the rough white light curve [[xmin,xmax],[ymin,ymax]]
+    
+    trace_method: 'CCF' # Method used to get the center positions of order 1 and 2, either 'CCF' or 'pastasoss'
+    sampfac:       100  # Factor used to supersample the detector when doing the CCF method
+    nknots_o1:     11   # Number of knots used to smooth the Order 1 trace
+    nknots_o2:     7    # Number of knots used to smooth the Order 2 trace
+    
+    xmin_o2: 750   # Lower column cutoff considered for order 2, below which we assume the data to be unusable
+    xmax_o2: 1750  # Upper column cutoff considered for order 2, above which we assume the data to be unusable
+    
+    plotting: true  # Produce and save the diagnostics plots
+    dpi:      300   # dpi of the figures
+    
+
+cst_settings:
+    # Bad pixel correction
+    frac_int:   0.5      # Fraction of flagged integrations needed for a pixel to be considered bad
+    interp_bp:  'linear' # Interpolation method to correct bad pixels, 'linear' or 'cubic' recommended
+
+    # Background subtraction
+    # Shape [[xmin,xmax],[ymin,ymax]]
+    inds1_bg: [[500,675],[210,-5]]  # Pixels used to compute the background scaling for the left portion of the detector
+    inds2_bg: [[725,900],[230,-5]]  # Pixels used to compute the background scaling for the right portion of the detector
+    bg_quant: 0.05                  # Quantile of the data vs model ratio distribution used to compute the scaling value
+
+    # Cosmic ray correction
+    wlc_pixs:    [[1250,1750],[40,70]] # Pixels used to compute the rough white light curve [[xmin,xmax],[ymin,ymax]]
+    nsig_CR:     4  # Any count that is >X sigma away from the running median is flagged as a cosmic ray
+    wlc_window:  11 # Window size used to "smooth" the white light curve 
+    CR_window:   10 # Window size of the running median used to flag the cosmic rays
+    
+    # 1/f correction 
+    ap_1f:       30      # size of aperture radius used to compute the 1/f values
+    median_ints: [0,200] # range of integrations used to compute median columns [int_min,int_max]
+
+    plotting: true  # Produce and save the diagnostics plots
+    dpi:      300   # dpi of the figures
+
+
+ext_settings:
+    ap_radius: 18.0
+    
+    plotting: true # Produce and save the diagnostics plots
+    dpi:      300  # dpi of the figures
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
