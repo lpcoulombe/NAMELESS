@@ -90,6 +90,11 @@ class nameless(object):
             print('Creating folder containing custom steps outputs')
             os.makedirs(self.cst_dir)
             
+        self.ext_dir = self.red_dir+'/extraction_outputs'
+        if not os.path.exists(self.ext_dir):
+            print('Creating folder containing extraction outputs')
+            os.makedirs(self.ext_dir)
+            
         # getting the handle of the JWST files, typically of format "jwXXXXYYY001_04101_00001"
         if handle is None:
             uncal_files = glob.glob(self.obs_dir+'/*uncal.fits')
@@ -148,45 +153,46 @@ class nameless(object):
             self.cst_status[step] = False
             
         
-    def run_reduction(self,run_s1=True,run_s2=True,run_prep=True,run_cst=True,run_ext=True):
+    def run_reduction(self,run_s1,run_s2,run_prep,run_cst,run_ext,s1_settings,
+                      s2_settings,prep_settings,cst_settings,ext_settings):
 
         # running stage 1 steps of the jwst pipeline
         if run_s1:                
-            run_jwst.run_stage1(self)
+            run_jwst.run_stage1(self,s1_settings)
         
         # running stage 2 steps of the jwst pipeline
         if run_s2:            
-            run_jwst.run_stage2(self)
+            run_jwst.run_stage2(self,s2_settings)
         
         # producing a few outputs to prepare for the NAMELESS custom data reduction steps 
         if run_prep:
             # list of things needed: rough wlc, wavelength solution, time array, median stack, trace profile
-            self.prep4cst()
+            self.prep4cst(prep_settings)
             
         # running custom data correction steps for bad pixels, background, cosmic rays, 1/f, and extraction
         if run_cst:
             # bad pixel correction
-            self.badpixcorr()
+            self.badpixcorr(cst_settings)
         
             # background subtraction
-            self.bg_corr()
+            self.bg_corr(cst_settings)
             
             # cosmic ray correction
-            self.cosmic_rays()
+            self.cosmic_rays(cst_settings)
             
-            self.oneoverf()
-
-            # save cleaned segments on disk
+            # 1/f correction
+            self.oneoverf(cst_settings)
+    
             self.saveclean()
             
         # running the spectral extraction step and saving the light curves
         if run_ext:
-            self.extraction()
-
+            self.extraction(ext_settings)
+            
         
     # steps to prepare for the NAMELESS custom reduction steps
     #TODO includes:
-    def prep4cst(self,wlc_range=[[1250,1750],[40,70]],plotting=True,dpi=300):
+    def prep4cst(self,settings):
         
         # let's collate the data from all individual segments into single arrays
         data, err, dq, t_int, pwcpos = self.collate(self.s2_red_dir,'sourcetypestep')
@@ -209,23 +215,24 @@ class nameless(object):
         #TODO: Also save median stack and rough white light curve
         
         # saving a figure of the median stack
-        if plotting: #TODO: could even make a figure for plotting 2D images like this, if we repeat it often enough
+        if settings['plotting']: #TODO: could even make a figure for plotting 2D images like this, if we repeat it often enough
             fig, ax = plt.subplots(1,1,figsize=(8,5))
             ax.imshow(self.medstack_s2,aspect='auto',vmin=0,vmax=np.nanmax(self.medstack_s2)/10)
             
             ax.set_xlabel('Spectral Direction')
             ax.set_ylabel('Dispersion Direction')
-            fig.savefig(self.prep_dir+'/stage_2_median_stack.pdf',dpi=dpi)
+            fig.savefig(self.prep_dir+'/stage_2_median_stack.pdf',dpi=settings['dpi'])
             plt.close(fig)
         
         
+        wlc_range = settings['wlc_pixs']
         # considering only a tiny portion of the detector to compute a rough "white" light curve
         cut_data = self.data_s2[:,wlc_range[1][0]:wlc_range[1][1],wlc_range[0][0]:wlc_range[0][1]]
         
         self.rough_wlc = np.nansum(cut_data,axis=(1,2))
         self.rough_wlc/= np.nanmedian(self.rough_wlc)
         
-        if plotting: 
+        if settings['plotting']: 
             fig, ax = plt.subplots(1,1,figsize=(8,6))
             ax.errorbar(self.t_int,self.rough_wlc,fmt='o',color='w',mec='k')
             
@@ -236,15 +243,15 @@ class nameless(object):
             ax2.set_xlim(0,len(self.t_int)-1)
             ax2.set_xlabel('Integration Number')
             
-            fig.savefig(self.prep_dir+'/stage_2_rough_wlc.pdf',dpi=dpi)
+            fig.savefig(self.prep_dir+'/stage_2_rough_wlc.pdf',dpi=settings['dpi'])
             plt.close(fig)
             
             
         # next, we want to get the wavelength solution
-        self.get_wave_sol()
+        self.get_wave_sol(settings)
         
         # and then we want to compute the trace position 
-        self.get_trace_pos(method='CCF')
+        self.get_trace_pos(settings)
 
 
         
@@ -303,7 +310,7 @@ class nameless(object):
 
     
     # function that calls pastasoss to get wavelength solution and trace position
-    def get_wave_sol(self,xmin_o2=750):
+    def get_wave_sol(self,settings):
         
         # getting trace position and wavelenths from pastasoss for orders 1 and 2
         trace_o1 = pastasoss.get_soss_traces(pwcpos=self.pwcpos, order='1', interp=True)
@@ -318,11 +325,13 @@ class nameless(object):
     
         # applying lower cutoff on order 2 since flux becomes neglibile at some point
         # xmin_o2 corresponds to cutting off wavelengths ~> 1.05, which are redundant with order 1
-        self.wave_o2      = self.wave_o2[np.where(trace_o2.x>=xmin_o2)]
-        self.pasta_trace2 = self.pasta_trace2[:,np.where(trace_o2.x>=xmin_o2)[0]]
+        self.wave_o2      = self.wave_o2[np.where((trace_o2.x>=settings['xmin_o2'])&(trace_o2.x<=settings['xmax_o2']))]
+        self.pasta_trace2 = self.pasta_trace2[:,np.where((trace_o2.x>=settings['xmin_o2'])&(trace_o2.x<=settings['xmax_o2']))[0]]
     
     
-    def get_trace_pos(self,method='CCF',sampfac=100,nknots1=11,nknots2=7,plotting=True,dpi=300):
+    def get_trace_pos(self,settings): #method='CCF',sampfac=100,nknots1=11,nknots2=7,plotting=True,dpi=300):
+        
+        method = settings['trace_method']
         
         # simply using the values returned by pastasoss for the trace positions
         if method=='pastasoss':
@@ -333,6 +342,9 @@ class nameless(object):
         elif method=='CCF': #TODO: this should be a separate function
             SP = fits.open(self.ancil_dir+'/jwst_niriss_specprofile_0022.fits')
             ST = fits.open(self.ancil_dir+'/jwst_niriss_spectrace_0023.fits')
+            
+            sampfac = settings['sampfac']
+            nknots1, nknots2 = settings['nknots_o1'], settings['nknots_o2']
             
             # model order 1 trace profile
             trace_prof1 = SP[1].data[20:-20,20:-20]
@@ -355,7 +367,10 @@ class nameless(object):
             
             # computing maximum of cross correlation function for each column of order 1
             for i,x in enumerate(self.pasta_trace1[0]):
-                data_col = self.medstack_s2[:,int(x)]
+                data_col      = self.medstack_s2[:,int(x)]
+                data_col[-5:] = np.nanmedian(data_col) # setting the last five non-science pixels to the median value
+            
+                
                 int_data = interpolate.interp1d(y[~np.isnan(data_col)],data_col[~np.isnan(data_col)],
                                                 kind='cubic',fill_value='extrapolate')
                 
@@ -365,6 +380,7 @@ class nameless(object):
                 y_o1[i] = y_cc[np.argmax(cc)]
                 
             y_o1 += abs_pos
+            
             
             # smoothing the profile, adapted from transitspectroscopy package routine
             #TODO: define xvals from pasta_trace1, cleaner
@@ -406,7 +422,7 @@ class nameless(object):
             y_o2_smooth = interpolate.splev(self.pasta_trace2[0], tck)           
             
             #TODO: put at the end of the function
-            if plotting:
+            if settings['plotting']:
                 fig, ax = plt.subplots(1,1,figsize=(8,6))
 
                 ax.imshow(self.medstack_s2,aspect='auto',vmin=0.,vmax=np.nanmax(self.medstack_s2/10))
@@ -416,7 +432,7 @@ class nameless(object):
                 
                 ax.plot(self.pasta_trace2[0],y_o2,'-r',lw=2)
                 ax.plot(self.pasta_trace2[0],y_o2_smooth,'--b',lw=2)
-                fig.savefig(self.prep_dir+'/trace_positions.pdf',dpi=dpi)
+                fig.savefig(self.prep_dir+'/trace_positions.pdf',dpi=settings['dpi'])
                 plt.close(fig)
             
             #TODO: again, set arrays of x1 and x2 instead of always calling pasta_trace
@@ -434,12 +450,12 @@ class nameless(object):
     
     #TODO: all the data reduction functions should be callable without using the nameless function
     
-    def badpixcorr(self,frac_int=0.5,interp='linear',plotting=True):
+    def badpixcorr(self,settings):
         
         data, dq_mask = self.data_s2, self.dq_mask
         
         med_dq = np.zeros(self.dq_mask.shape[1:])
-        med_dq[np.mean(dq_mask,axis=0)>frac_int] = 1
+        med_dq[np.mean(dq_mask,axis=0)>settings['frac_int']] = 1
         
         data_corr = np.zeros(data.shape)
         
@@ -461,7 +477,7 @@ class nameless(object):
             #TODO: check if this is needed
             #corr_int[inds_bp] = -1e3 # set bad pixels to some arbitary non-NaN value
             
-            corr_int[inds_bp] = interpolate.griddata((x_gp,y_gp),z_gp,(x_bp,y_bp),method=interp,fill_value=0.)
+            corr_int[inds_bp] = interpolate.griddata((x_gp,y_gp),z_gp,(x_bp,y_bp),method=settings['interp_bp'],fill_value=0.)
             
             data_corr[i] = corr_int
             
@@ -472,7 +488,7 @@ class nameless(object):
         self.data_cst, self.err_cst, self.dq_cst = data_corr, self.err_s2, self.dq_s2
     
     
-    def bg_corr(self,inds1=[[500,675],[210,-5]],inds2=[[725,900],[230,-5]],bg_quant=0.05,plotting=True,dpi=300):
+    def bg_corr(self,settings):
         
         #TODO: add option for 96 substrip model
         bg_mod = np.load(self.ancil_dir+'/model_background256.npy')
@@ -485,12 +501,14 @@ class nameless(object):
         
         pos_jump = np.argmax(grad_bg,axis=1) 
         
+        inds1, inds2 = settings['inds1_bg'], settings['inds2_bg']
+        
         xmin1,xmax1,ymin1,ymax1 = inds1[0][0],inds1[0][1],inds1[1][0],inds1[1][1]
         xmin2,xmax2,ymin2,ymax2 = inds2[0][0],inds2[0][1],inds2[1][0],inds2[1][1]
         
         
-        bg_scaling1 = np.quantile(med_data[ymin1:ymax1,xmin1:xmax1]/bg_mod[ymin1:ymax1,xmin1:xmax1],bg_quant)
-        bg_scaling2 = np.quantile(med_data[ymin2:ymax2,xmin2:xmax2]/bg_mod[ymin2:ymax2,xmin2:xmax2],bg_quant)
+        bg_scaling1 = np.quantile(med_data[ymin1:ymax1,xmin1:xmax1]/bg_mod[ymin1:ymax1,xmin1:xmax1],settings['bg_quant'])
+        bg_scaling2 = np.quantile(med_data[ymin2:ymax2,xmin2:xmax2]/bg_mod[ymin2:ymax2,xmin2:xmax2],settings['bg_quant'])
         
         scaled_bg = np.zeros(bg_mod.shape)
         
@@ -502,7 +520,7 @@ class nameless(object):
         #TODO: add plotting option for a single row
         self.data_cst -= scaled_bg[np.newaxis]
         
-        if plotting:
+        if settings['plotting']:
             fig, axes = plt.subplots(1,2,figsize=(12,5))
             
             axes[0].imshow(med_data,aspect='auto',vmin=0,vmax=np.nanmax(med_data)/10)
@@ -512,21 +530,21 @@ class nameless(object):
                 ax.set_xlabel('Spectral Direction')
                 ax.set_ylabel('Dispersion Direction')
                 
-            fig.savefig(self.cst_dir+'/background_subtraction.pdf',dpi=dpi)
+            fig.savefig(self.cst_dir+'/background_subtraction.pdf',dpi=settings['dpi'])
             plt.close(fig)
         
     
     
-    def cosmic_rays(self,nsig=4,wlc_range=[[1250,1750],[40,70]],wlc_window=11,CR_window=10,plotting=True,
-                    dpi=300):
+    def cosmic_rays(self,settings):
         
         # let's do an initial 1/f correction taking only the median of each frame
         med_data = np.nanmedian(self.data_cst,axis=0)
         
+        wlc_range = settings['wlc_pixs']
         rough_wlc = np.nansum(self.data_cst[:,wlc_range[1][0]:wlc_range[1][1],wlc_range[0][0]:wlc_range[0][1]],axis=(1,2))
         rough_wlc = rough_wlc / np.nanmedian(rough_wlc)
         
-        rough_wlc = median_filter(rough_wlc,wlc_window)
+        rough_wlc = median_filter(rough_wlc,settings['wlc_window'])
         
         astro_sig = med_data[np.newaxis] * rough_wlc[:,np.newaxis,np.newaxis]
         
@@ -538,7 +556,7 @@ class nameless(object):
         
         data -= med_col[:,np.newaxis]
         
-        running_median = median_filter(data,(CR_window,1,1))
+        running_median = median_filter(data,(settings['CR_window'],1,1))
         
         resids = data - running_median
         
@@ -547,7 +565,7 @@ class nameless(object):
         stdev = stats.iqr(resids,rng=(16,84),axis=0)/2.
         
         #TODO: also save array that corresponds to the CR flags, and update DQs
-        
+        nsig = settings['nsig_CR']
         data[np.where(np.abs(resids)>nsig*stdev)] = running_median[np.where(np.abs(resids)>nsig*stdev)]
 
         # now let's add back the 1/f and astrophysical signal
@@ -557,8 +575,7 @@ class nameless(object):
         
         self.data_cst = data
         
-        if plotting:
-            
+        if settings['plotting']:
             inds = np.array([1,2,3]) * len(data) / 3. - 1
             inds = inds.astype(int)
             
@@ -573,15 +590,18 @@ class nameless(object):
                     ax.set_xlabel('Spectral Direction')
                     ax.set_ylabel('Dispersion Direction')
                 
-            fig.savefig(self.cst_dir+'/CR_correction.pdf',dpi=dpi)
+            fig.savefig(self.cst_dir+'/CR_correction.pdf',dpi=settings['dpi'])
             plt.close(fig)
             
 
-    def oneoverf(self,ap=30,median_ints=np.arange(0,200),plotting=True,dpi=300):
 
+    def oneoverf(self,settings):
+        
         #TODO: clean up this function
 
         #TODO: add option to consider a different median stack as a function of time (in case of tilt event)
+        
+        median_ints = np.arange(settings['median_ints'][0],settings['median_ints'][1])
 
         med_stack = np.nanmedian(self.data_cst[median_ints],axis=0)[np.newaxis]
 
@@ -596,6 +616,8 @@ class nameless(object):
 
         # setting error of pixels >ap from the order 1 center to infinity
         x1,y1 = self.trace1
+        
+        ap = settings['ap_1f']
         
         for i in range(x1.size):
             err[:,int(y1[i]+ap):,int(x1[i])] = np.inf
@@ -661,7 +683,7 @@ class nameless(object):
         intercept2 = ssyssw_2 - slope2*ssxssw_2
         
         
-        if plotting:
+        if settings['plotting']:
             fig,ax = plt.subplots(2,2,figsize=(12,8))
             
             ax[0,0].imshow(slope,aspect='auto',vmin=0.998,vmax=1.002)
@@ -677,7 +699,7 @@ class nameless(object):
                 ax[0,i].set_ylabel('Integration Number')
                 ax[1,i].set_ylabel('Integration Number')
             
-            fig.savefig(self.cst_dir+'/scaling_and_1overf_noise.pdf',dpi=dpi)
+            fig.savefig(self.cst_dir+'/scaling_and_1overf_noise.pdf',dpi=settings['dpi'])
             plt.close(fig)
         
         
@@ -698,7 +720,7 @@ class nameless(object):
         
         self.data_cst = data_corr
         
-        if plotting:
+        if settings['plotting']:
             fig,axes = plt.subplots(5,2,figsize=(12,16),sharex=True)
         
             int_no = [int(len(data)/3),int(2*len(data)/3)]
@@ -730,13 +752,13 @@ class nameless(object):
             clb = plt.colorbar(im4,ax=axes[4])
             clb.set_label('Median + C-by-C Corrected',fontsize=8)
             
-            fig.savefig(self.cst_dir+'/1overf_noise_correction.pdf',dpi=dpi)
+            fig.savefig(self.cst_dir+'/1overf_noise_correction.pdf',dpi=settings['dpi'])
             print('Produced and saved figure')
             plt.close()
         
 
     
-    def extraction(self,ap_radius=18.,plotting=True,dpi=300):
+    def extraction(self,settings):
         
         data, err, dq = np.copy(self.data_cst), np.copy(self.err_s2), np.copy(self.dq_s2)
         
@@ -745,7 +767,7 @@ class nameless(object):
         # extraction of order 1 data
         x1, y1 = self.trace1[0], self.trace1[1]
         
-        aperture_radius = np.zeros(x1.size) + ap_radius
+        aperture_radius = np.zeros(x1.size) + settings['ap_radius']
         
         flux_arr1, err_arr1 = self.aperture_extraction_vr(data,
                                                           x1,
@@ -758,7 +780,7 @@ class nameless(object):
         # repeating extraction for order 2
         x2, y2 = self.trace2[0], self.trace2[1]        
         
-        aperture_radius = np.zeros(x2.size) + ap_radius
+        aperture_radius = np.zeros(x2.size) + settings['ap_radius']
 
         flux_arr2, err_arr2 = self.aperture_extraction_vr(data,
                                                           x2,
@@ -767,18 +789,38 @@ class nameless(object):
                                                           error_data = err)
         
         
-        #TODO: now we want to save these in the proper file format
-        lcs = dict()
-        lcs['flux_o1'] = flux_arr1
-        lcs['flux_o2'] = flux_arr2
+        #TODO: now we want to save these in the proper file format, I also want to do light curve figures
+        # doing .fits files for now, but will want to add other options (e.g., xarray) later 
         
-        lcs['err_o1']  = err_arr1
-        lcs['err_o2']  = err_arr2
+        primary_hdu = fits.PrimaryHDU()
         
-        lcs['time [BJD_TDB]']    = self.t_int
+        # Order 1
+        hdu_f1 = fits.ImageHDU(flux_arr1, name='FLUX_O1')
+        hdu_e1 = fits.ImageHDU(err_arr1,  name='ERR_O1')
         
-        with open(self.cst_dir+'/2D_light_curves_extraction.pkl', 'wb') as handle:
-            pickle.dump(lcs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        hdu_fn1 = fits.ImageHDU(flux_arr1/np.nanmedian(flux_arr1,axis=0), name='NORM_FLUX_O1')
+        hdu_en1 = fits.ImageHDU(err_arr1/np.nanmedian(flux_arr1,axis=0),  name='NORM_ERR_O1')
+        
+        hdu_w1 = fits.ImageHDU(self.wave_o1, name='WAVE_O1')
+
+        
+        # Order 2 
+        hdu_f2 = fits.ImageHDU(flux_arr2, name='FLUX_O2')
+        hdu_e2 = fits.ImageHDU(err_arr2,  name='ERR_O2')
+        
+        hdu_fn2 = fits.ImageHDU(flux_arr2/np.nanmedian(flux_arr2,axis=0), name='NORM_FLUX_O2')
+        hdu_en2 = fits.ImageHDU(err_arr2/np.nanmedian(flux_arr2,axis=0),  name='NORM_ERR_O2')
+        
+        hdu_w2 = fits.ImageHDU(self.wave_o2, name='WAVE_O2')
+        
+        
+        # Time 
+        hdu_t = fits.ImageHDU(self.t_int, name='TIME')
+        
+        hdul = fits.HDUList([primary_hdu, hdu_f1, hdu_e1, hdu_fn1, hdu_en1, hdu_w1,
+                             hdu_f2, hdu_e2, hdu_fn2, hdu_en2, hdu_w2, hdu_t])
+        
+        hdul.writeto(self.ext_dir+'/2D_light_curves_extraction.fits',overwrite=True)
         
         
    
