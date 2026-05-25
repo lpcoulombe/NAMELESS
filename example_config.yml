@@ -1,15 +1,15 @@
 # example yaml config file to perform a NAMELESS reduction
 
 observations:
-    obs_folder: 'WASP_39b_NIRISS' # folder that contains the .uncal files of interest
-    red_folder:                   # folder that contains reduction imputs, leave empty for default
-    nseg:                         # number of data segments, leave empty to reduce all
-    segs:                         # set of segments to analyze, leave empty to reduce all
+    obs_folder: 'WASP_39b_NIRISS'    # folder that contains the .uncal files of interest
+    red_folder:                      # folder that contains reduction imputs, leave empty for default
+    nseg:       3                    # number of data segments, leave empty to reduce all
+    segs:       ['001','002','003']  # set of segments to analyze (e.g., ['001','002']), leave empty to reduce all and if nseg is left empty
     
     
 stages: 
-    run_s1:   false   # Stage 1 steps of the jwst pipeline 
-    run_s2:   false   # Stage 2 steps of the jwst pipeline
+    run_s1:   true   # Stage 1 steps of the jwst pipeline 
+    run_s2:   true   # Stage 2 steps of the jwst pipeline
     run_prep: true   # Preparatory steps before custom corrections
     run_cst:  true   # Custom NAMELESS corrections
     run_ext:  true   # 2D light curve extraction
@@ -47,7 +47,7 @@ prep_settings:
     nknots_o2:     7    # Number of knots used to smooth the Order 2 trace
     
     xmin_o2: 750   # Lower column cutoff considered for order 2, below which we assume the data to be unusable
-    xmax_o2: 1750  # Upper column cutoff considered for order 2, above which we assume the data to be unusable
+    xmax_o2: 1800  # Upper column cutoff considered for order 2, above which we assume the data to be unusable
     
     plotting: true  # Produce and save the diagnostics plots
     dpi:      300   # dpi of the figures
@@ -56,7 +56,7 @@ prep_settings:
 cst_settings:
     # Bad pixel correction
     frac_int:   0.5      # Fraction of flagged integrations needed for a pixel to be considered bad
-    interp_bp:  'linear' # Interpolation method to correct bad pixels, 'linear' or 'cubic' recommended
+    interp_bp:  'linear' # Interpolation method to correct bad pixels, 'nearest' or 'linear' or 'cubic' recommended
 
     # Background subtraction
     # Shape [[xmin,xmax],[ymin,ymax]]
@@ -71,7 +71,7 @@ cst_settings:
     CR_window:   10 # Window size of the running median used to flag the cosmic rays
     
     # 1/f correction 
-    ap_1f:       30      # size of aperture radius used to compute the 1/f values
+    ap_1f:       20      # size of aperture RADIUS used to compute the 1/f values
     median_ints: [0,200] # range of integrations used to compute median columns [int_min,int_max]
 
     plotting: true  # Produce and save the diagnostics plots
