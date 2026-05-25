@@ -33,7 +33,8 @@ def main():
 
     # initializing reduction object
     obs = config['observations']
-    reduc = nameless.nameless(obs_folder=obs['obs_folder'],red_folder=obs['red_folder'])
+    reduc = nameless.nameless(obs_folder=obs['obs_folder'],red_folder=obs['red_folder'],
+                              nseg=obs['nseg'],segs=obs['segs'])
 
     reduc.config = config
 

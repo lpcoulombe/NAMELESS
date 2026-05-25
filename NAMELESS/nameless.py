@@ -127,7 +127,8 @@ class nameless(object):
                 
             else:
                 self.segs = np.array(segs)
-            
+           
+        print('segment list: ', self.segs)
             
         # list of stage 1 steps of the jwst STScI pipeline
         self.s1_steps  = s1_steps
@@ -307,8 +308,11 @@ class nameless(object):
         
         # simply using the values returned by pastasoss for the trace positions
         if method=='pastasoss':
-            self.trace_o1 = self.pasta_trace1
-            self.trace_o2 = self.pasta_trace2
+            self.trace1 = self.pasta_trace1
+            self.trace2 = self.pasta_trace2
+            
+            y_o1, y_o1_smooth = self.trace1[1], self.trace1[1]
+            y_o2, y_o2_smooth = self.trace2[1], self.trace2[1]
             
         # doing cross-correlation with a reference trace profile
         elif method=='CCF': #TODO: this should be a separate function
@@ -339,9 +343,11 @@ class nameless(object):
             
             # computing maximum of cross correlation function for each column of order 1
             for i,x in enumerate(self.pasta_trace1[0]):
-                data_col      = self.medstack_s2[:,int(x)]
-                data_col[-5:] = np.nanmedian(data_col) # setting the last five non-science pixels to the median value
-            
+                data_col      = np.copy(self.medstack_s2[:,int(x)])
+                
+                # let's set everything that's >30 pixels away from the pastasoss guess to 0
+                data_col[0:int(self.pasta_trace1[1,i]-30)]  = np.nanmedian(self.medstack_s2[:,int(x)])
+                data_col[int(self.pasta_trace1[1,i]+30):-1] = np.nanmedian(self.medstack_s2[:,int(x)])
                 
                 int_data = interpolate.interp1d(y[~np.isnan(data_col)],data_col[~np.isnan(data_col)],
                                                 kind='cubic',fill_value='extrapolate')
@@ -364,17 +370,17 @@ class nameless(object):
             y_o1_smooth = interpolate.splev(self.pasta_trace1[0], tck)
                 
             
-            # repeating the same thing for order 2, masking order 1
-            medstack_o1masked   = np.copy(self.medstack_s2)
-            
-            # applying curved mask
-            Y = np.arange(medstack_o1masked.shape[0])[:,np.newaxis]
-            medstack_o1masked[:,int(xend):int(xstart+1)][(Y >= (y_o1_smooth-20)) & (Y <= (y_o1_smooth+20))] = 0            
-            
+            # repeating the same thing for order 2
             y_o2 = np.zeros(self.wave_o2.size)
             
             for i,x in enumerate(self.pasta_trace2[0]):
-                data_col = medstack_o1masked[:,int(x)]
+                data_col = np.copy(self.medstack_s2[:,int(x)])
+                
+                data_col[0:int(self.pasta_trace2[1,i]-30)]  = np.nanmedian(self.medstack_s2[:,int(x)])
+                data_col[int(self.pasta_trace2[1,i]+30):-1] = np.nanmedian(self.medstack_s2[:,int(x)])
+                
+                data_col[-5:] = np.nanmedian(data_col)
+                
                 int_data = interpolate.interp1d(y[~np.isnan(data_col)],data_col[~np.isnan(data_col)],
                                                 kind='cubic',fill_value='extrapolate')
                 
@@ -392,20 +398,7 @@ class nameless(object):
             tck   = interpolate.splrep(np.double(self.pasta_trace2[0]),y_o2, t=knots)
             
             y_o2_smooth = interpolate.splev(self.pasta_trace2[0], tck)           
-            
-            #TODO: put at the end of the function
-            if settings['plotting']:
-                fig, ax = plt.subplots(1,1,figsize=(8,6))
-
-                ax.imshow(self.medstack_s2,aspect='auto',vmin=0.,vmax=np.nanmax(self.medstack_s2/10))
-                
-                ax.plot(self.pasta_trace1[0],y_o1,'-r',lw=2)
-                ax.plot(self.pasta_trace1[0],y_o1_smooth,'--b',lw=2)
-                
-                ax.plot(self.pasta_trace2[0],y_o2,'-r',lw=2)
-                ax.plot(self.pasta_trace2[0],y_o2_smooth,'--b',lw=2)
-                fig.savefig(self.prep_dir+'/trace_positions.pdf',dpi=settings['dpi'])
-                plt.close(fig)
+        
             
             #TODO: again, set arrays of x1 and x2 instead of always calling pasta_trace
             self.trace1 = np.array([self.pasta_trace1[0],y_o1_smooth])
@@ -419,12 +412,29 @@ class nameless(object):
             #TODO: also add convolution method
             print('Other methods have not yet been implemented!')
             pdb.set_trace()
+            
+            
+        #TODO: put at the end of the function
+        if settings['plotting']:
+            fig, ax = plt.subplots(1,1,figsize=(8,6))
+
+            ax.imshow(self.medstack_s2,aspect='auto',vmin=0.,vmax=np.nanmax(self.medstack_s2/10))
+            
+            ax.plot(self.pasta_trace1[0],y_o1,'-r',lw=2)
+            ax.plot(self.pasta_trace1[0],y_o1_smooth,'--b',lw=2)
+            
+            ax.plot(self.pasta_trace2[0],y_o2,'-r',lw=2)
+            ax.plot(self.pasta_trace2[0],y_o2_smooth,'--b',lw=2)
+            fig.savefig(self.prep_dir+'/trace_positions.pdf',dpi=settings['dpi'])
+            plt.close(fig)
     
     #TODO: all the data reduction functions should be callable without using the nameless function
     
     def badpixcorr(self,settings):
         
         data, dq_mask = self.data_s2, self.dq_mask
+        
+        med_data = np.nanmedian(data,axis=0)
         
         med_dq = np.zeros(self.dq_mask.shape[1:])
         med_dq[np.mean(dq_mask,axis=0)>settings['frac_int']] = 1
@@ -434,7 +444,7 @@ class nameless(object):
         #TO-DO: save outlier map (med_dq) for reference
         for i in range(len(data)):
             #TODO: take out step counting, or change for something that looks better
-            print('step: '+str(i+1)+'/'+str(len(data)))
+            print('\rBad Pixel Step: '+str(i+1)+'/'+str(len(data)),end='')
             
             # integration to be corrected
             corr_int = np.copy(data[i])
@@ -456,7 +466,19 @@ class nameless(object):
         #TODO: add option to set flags of corrected pixels back to 0, if we trust them
         # would also require to look how to fix the errors as well
         
-        #TODO: add plotting option
+        if settings['plotting']:
+            fig, axes = plt.subplots(1,2,figsize=(12,5))
+            
+            axes[0].imshow(med_data,aspect='auto',vmin=0,vmax=np.nanmax(med_data)/10)
+            axes[1].imshow(np.nanmedian(data_corr,axis=0),aspect='auto',vmin=0,vmax=np.nanmax(med_data)/10)
+            
+            for ax in axes:
+                ax.set_xlabel('Spectral Direction')
+                ax.set_ylabel('Dispersion Direction')
+                
+            fig.savefig(self.cst_dir+'/bad_pixel_correction.pdf',dpi=settings['dpi'])
+            plt.close(fig)
+        
         self.data_cst, self.err_cst, self.dq_cst = data_corr, self.err_s2, self.dq_s2
     
     
@@ -759,28 +781,35 @@ class nameless(object):
                                                           aperture_radius = aperture_radius,
                                                           error_data = err)
         
+        # instead of using the errors from the extraction, let's compute the point-to-point scatter
+        noise_arr1 = 0.5*(flux_arr1[0:-2]+flux_arr1[2:]) - flux_arr1[1:-1]
+        noise_arr1 = (stats.iqr(noise_arr1,axis=0,rng=(16,84))/2) / np.sqrt(3.0/2.0)
+        noise_arr1 = np.zeros(flux_arr1.shape) + noise_arr1[np.newaxis] 
         
-        #TODO: now we want to save these in the proper file format, I also want to do light curve figures
-        # doing .fits files for now, but will want to add other options (e.g., xarray) later 
+        noise_arr2 = 0.5*(flux_arr2[0:-2]+flux_arr2[2:]) - flux_arr2[1:-1]
+        noise_arr2 = (stats.iqr(noise_arr2,axis=0,rng=(16,84))/2) / np.sqrt(3.0/2.0)
+        noise_arr2 = np.zeros(flux_arr2.shape) + noise_arr2[np.newaxis] 
+        
+        #TODO: Do light curve figures, and also save in xarray format
         
         primary_hdu = fits.PrimaryHDU()
         
         # Order 1
         hdu_f1 = fits.ImageHDU(flux_arr1, name='FLUX_O1')
-        hdu_e1 = fits.ImageHDU(err_arr1,  name='ERR_O1')
+        hdu_e1 = fits.ImageHDU(noise_arr1,  name='ERR_O1')
         
         hdu_fn1 = fits.ImageHDU(flux_arr1/np.nanmedian(flux_arr1,axis=0), name='NORM_FLUX_O1')
-        hdu_en1 = fits.ImageHDU(err_arr1/np.nanmedian(flux_arr1,axis=0),  name='NORM_ERR_O1')
+        hdu_en1 = fits.ImageHDU(noise_arr1/np.nanmedian(flux_arr1,axis=0),  name='NORM_ERR_O1')
         
         hdu_w1 = fits.ImageHDU(self.wave_o1, name='WAVE_O1')
 
         
         # Order 2 
         hdu_f2 = fits.ImageHDU(flux_arr2, name='FLUX_O2')
-        hdu_e2 = fits.ImageHDU(err_arr2,  name='ERR_O2')
+        hdu_e2 = fits.ImageHDU(noise_arr2,  name='ERR_O2')
         
         hdu_fn2 = fits.ImageHDU(flux_arr2/np.nanmedian(flux_arr2,axis=0), name='NORM_FLUX_O2')
-        hdu_en2 = fits.ImageHDU(err_arr2/np.nanmedian(flux_arr2,axis=0),  name='NORM_ERR_O2')
+        hdu_en2 = fits.ImageHDU(noise_arr2/np.nanmedian(flux_arr2,axis=0),  name='NORM_ERR_O2')
         
         hdu_w2 = fits.ImageHDU(self.wave_o2, name='WAVE_O2')
         
