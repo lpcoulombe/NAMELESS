@@ -292,6 +292,7 @@ class nameless(object):
         cleandirec = self.cst_dir
         cleanfiletype = 'clean'
 
+        i0 = 0 # counter of the current integration within the self data container
         for i, seg in enumerate(self.segs):
             # Read the saved file after s2 to get the segment size and metadata right
             # TODO: assuming for now that this is used to collate files after s2, make it more flexible
@@ -300,13 +301,17 @@ class nameless(object):
             # the starting and ending integrations for that segment
             istart = dm.meta.exposure.integration_start
             iend = dm.meta.exposure.integration_end
+            isize = iend - istart + 1
             # replace the datamodel content by the values from cst
-            dm.data = np.copy(self.data_cst[istart-1:iend])
-            dm.err = np.copy(self.err_cst[istart-1:iend])
-            dm.dq = np.copy(self.dq_cst[istart-1:iend])
+            #dm.data = np.copy(self.data_cst[istart-1:iend])
+            #dm.err = np.copy(self.err_cst[istart-1:iend])
+            #dm.dq = np.copy(self.dq_cst[istart-1:iend])
+            dm.data = np.copy(self.data_cst[i0:i0+isize])
+            dm.err = np.copy(self.err_cst[i0:i0+isize])
+            dm.dq = np.copy(self.dq_cst[i0:i0+isize])
             # save on disk in the cst directory with clean file name
             dm.save(cleandirec + '/' + self.obs_handle + '-seg' + seg + '_nis_1_' + cleanfiletype + '.fits')
-
+            i0 = i0 + isize
         return
 
     
@@ -512,8 +517,13 @@ class nameless(object):
     
     def bg_corr(self,settings):
         
-        #TODO: add option for 96 substrip model
+        # Determine subarray size to handle background accordingly
+        datadim = np.shape(self.data_cst)
+        substrip = datadim[-2]
         bg_mod = np.load(self.ancil_dir+'/model_background256.npy')
+        if substrip == 96:
+            # the substrip06 subarray is offset by 10 pixels from top
+            bg_mod = bg_mod[256-10-96:256-10,:]
         
         #TODO: add option to not consider the pixels with DQ flags
         med_data = np.nanmedian(self.data_cst,axis=0)
