@@ -3,8 +3,8 @@
 observations:
     obs_folder: 'WASP_39b_NIRISS'    # folder that contains the .uncal files of interest
     red_folder:                      # folder that contains reduction imputs, leave empty for default
-    nseg:       3                    # number of data segments, leave empty to reduce all
-    segs:       ['001','002','003']  # set of segments to analyze (e.g., ['001','002']), leave empty to reduce all and if nseg is left empty
+    nseg:                    # number of data segments, leave empty to reduce all
+    segs:                    # set of segments to analyze (e.g., ['001','002']), leave empty to reduce all and if nseg is left empty
     
     
 stages: 
@@ -54,6 +54,17 @@ prep_settings:
     
 
 cst_settings:
+    # the correction steps to be ran
+    badpixcorr:  false # bad pixel flagging and correction
+    bg_corr:     false # background subtraction
+    cosmic_rays: false # cosmic ray flagging and correction
+    oneoverf:    true # 1/f correction
+    
+    # the intermediate steps to be saved
+    badpixcorr_save:  true
+    bg_corr_save:     true
+    cosmic_rays_save: true
+
     # Bad pixel correction
     frac_int:   0.5      # Fraction of flagged integrations needed for a pixel to be considered bad
     interp_bp:  'linear' # Interpolation method to correct bad pixels, 'nearest' or 'linear' or 'cubic' recommended
@@ -71,7 +82,7 @@ cst_settings:
     CR_window:   10 # Window size of the running median used to flag the cosmic rays
     
     # 1/f correction 
-    ap_1f:       20      # size of aperture RADIUS used to compute the 1/f values
+    ap_1f:       30      # size of aperture RADIUS used to compute the 1/f values
     median_ints: [0,200] # range of integrations used to compute median columns [int_min,int_max]
 
     plotting: true  # Produce and save the diagnostics plots

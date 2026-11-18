@@ -63,37 +63,9 @@ class nameless(object):
         # directory where the ancillary files are stored
         self.ancil_dir = 'Auxiliary'
         
-        #TODO: make a function that creates folders instead of doing all this in __init__
-        # creating reduction folder if it doesn't already exist
-        if not os.path.exists(self.red_dir):
-            print('Creating folder for reduction outputs')
-            os.makedirs(self.red_dir)
-            
-        # creating stage 1 and 2 output folders if they don't exist
-        self.s1_red_dir = self.red_dir+'/stage1_outputs'
-        if not os.path.exists(self.s1_red_dir):
-            print('Creating folder for stage 1 reduction outputs')
-            os.makedirs(self.s1_red_dir)
-            
-        self.s2_red_dir = self.red_dir+'/stage2_outputs'
-        if not os.path.exists(self.s2_red_dir):
-            print('Creating folder for stage 2 reduction outputs')
-            os.makedirs(self.s2_red_dir)
-            
-        self.prep_dir = self.red_dir+'/prep_step_outputs'
-        if not os.path.exists(self.prep_dir):
-            print('Creating folder containing products needed for custom steps')
-            os.makedirs(self.prep_dir)
-            
-        self.cst_dir = self.red_dir+'/custom_steps_outputs'
-        if not os.path.exists(self.cst_dir):
-            print('Creating folder containing custom steps outputs')
-            os.makedirs(self.cst_dir)
-            
-        self.ext_dir = self.red_dir+'/extraction_outputs'
-        if not os.path.exists(self.ext_dir):
-            print('Creating folder containing extraction outputs')
-            os.makedirs(self.ext_dir)
+        
+        # creating necessary folders if they don't already exist
+        self.make_folders()
             
         # getting the handle of the JWST files, typically of format "jwXXXXYYY001_04101_00001"
         if handle is None:
@@ -152,6 +124,39 @@ class nameless(object):
             
         for step in self.s1_steps:
             self.cst_status[step] = False
+
+
+def make_folders(self):
+    if not os.path.exists(self.red_dir):
+        print('Creating folder for reduction outputs')
+        os.makedirs(self.red_dir)
+        
+    # creating stage 1 and 2 output folders if they don't exist
+    self.s1_red_dir = self.red_dir+'/stage1_outputs'
+    if not os.path.exists(self.s1_red_dir):
+        print('Creating folder for stage 1 reduction outputs')
+        os.makedirs(self.s1_red_dir)
+        
+    self.s2_red_dir = self.red_dir+'/stage2_outputs'
+    if not os.path.exists(self.s2_red_dir):
+        print('Creating folder for stage 2 reduction outputs')
+        os.makedirs(self.s2_red_dir)
+        
+    self.prep_dir = self.red_dir+'/prep_step_outputs'
+    if not os.path.exists(self.prep_dir):
+        print('Creating folder containing products needed for custom steps')
+        os.makedirs(self.prep_dir)
+        
+    self.cst_dir = self.red_dir+'/custom_steps_outputs'
+    if not os.path.exists(self.cst_dir):
+        print('Creating folder containing custom steps outputs')
+        os.makedirs(self.cst_dir)
+        
+    self.ext_dir = self.red_dir+'/extraction_outputs'
+    if not os.path.exists(self.ext_dir):
+        print('Creating folder containing extraction outputs')
+        os.makedirs(self.ext_dir)
+
             
         
     def run_reduction(self,run_s1,run_s2,run_prep,run_cst,run_ext,s1_settings,
@@ -172,27 +177,91 @@ class nameless(object):
             
         # running custom data correction steps for bad pixels, background, cosmic rays, 1/f, and extraction
         if run_cst:
+            if not run_prep:
+                self.wave_o1 = np.loadtxt(self.prep_dir+'/wave_solution_order1.txt') 
+                self.wave_o2 = np.loadtxt(self.prep_dir+'/wave_solution_order2.txt')
+                
+                self.trace1 = np.loadtxt(self.prep_dir+'/trace_position_order1.txt')
+                self.trace2 = np.loadtxt(self.prep_dir+'/trace_position_order2.txt')
+                
+                if cst_settings['badpixcorr']: # fetching data from stage 2
+
+                    self.data_s2, self.err_s2, self.dq_s2, self.t_int, pwcpos = self.collate(self.s2_red_dir,'sourcetypestep')
+                    
+                    # creating a DQ mask, where all DQ flags of 0 are considered valid counts
+                    self.dq_mask = np.zeros(self.dq_s2.shape)
+                    self.dq_mask[np.where(self.dq_s2>0)] = 1
+                
             # bad pixel correction
-            self.badpixcorr(cst_settings)
+            if cst_settings['badpixcorr']:
+                self.badpixcorr(cst_settings)
+                
+                if cst_settings['badpixcorr_save']:
+                    self.saveclean(cleanfiletype='badpixcorr')
         
             # background subtraction
-            self.bg_corr(cst_settings)
+            if cst_settings['bg_corr']:
+                if not cst_settings['badpixcorr']:
+                    # if we start directly at background subtraction
+                    self.data_cst, self.err_cst, self.dq_cst, self.t_int, pwcpos = self.collate(self.cst_dir,'badpixcorr')
+                    
+                    # creating a DQ mask, where all DQ flags of 0 are considered valid counts
+                    self.dq_mask = np.zeros(self.dq_cst.shape)
+                    self.dq_mask[np.where(self.dq_cst>0)] = 1
+                
+                self.bg_corr(cst_settings)
+                
+                if cst_settings['bg_corr_save']:
+                    self.saveclean(cleanfiletype='bg_corr')
             
             # cosmic ray correction
-            self.cosmic_rays(cst_settings)
+            if cst_settings['cosmic_rays']:
+                if not cst_settings['bg_corr']:
+                    # if we start directly at cosmic ray correction
+                    self.data_cst, self.err_cst, self.dq_cst, self.t_int, pwcpos = self.collate(self.cst_dir,'bg_corr')
+                    
+                    # creating a DQ mask, where all DQ flags of 0 are considered valid counts
+                    self.dq_mask = np.zeros(self.dq_cst.shape)
+                    self.dq_mask[np.where(self.dq_cst>0)] = 1
+                
+                self.cosmic_rays(cst_settings)
+
+                if cst_settings['cosmic_rays_save']:
+                    self.saveclean(cleanfiletype='cosmic_rays')
             
             # 1/f correction
-            self.oneoverf(cst_settings)
-    
-            self.saveclean()
+            if cst_settings['oneoverf']:
+                if not cst_settings['cosmic_rays']:
+                    # if we start directly at 1/f correction
+                    self.data_cst, self.err_cst, self.dq_cst, self.t_int, pwcpos = self.collate(self.cst_dir,'cosmic_rays')
+                    
+                    # creating a DQ mask, where all DQ flags of 0 are considered valid counts
+                    self.dq_mask = np.zeros(self.dq_cst.shape)
+                    self.dq_mask[np.where(self.dq_cst>0)] = 1
+                
+                self.oneoverf(cst_settings)
+                
+                self.saveclean()
             
         # running the spectral extraction step and saving the light curves
         if run_ext:
+            if not run_cst:
+                self.wave_o1 = np.loadtxt(self.prep_dir+'/wave_solution_order1.txt') 
+                self.wave_o2 = np.loadtxt(self.prep_dir+'/wave_solution_order2.txt')
+                
+                self.trace1 = np.loadtxt(self.prep_dir+'/trace_position_order1.txt')
+                self.trace2 = np.loadtxt(self.prep_dir+'/trace_position_order2.txt')
+                
+                self.data_cst, self.err_cst, self.dq_cst, self.t_int, pwcpos = self.collate(self.cst_dir,'clean')
+                
+                # creating a DQ mask, where all DQ flags of 0 are considered valid counts
+                self.dq_mask = np.zeros(self.dq_cst.shape)
+                self.dq_mask[np.where(self.dq_cst>0)] = 1
+            
             self.extraction(ext_settings)
             
         
-    # steps to prepare for the NAMELESS custom reduction steps
-    #TODO includes:
+    # steps to prepare for the NAMELESS custom reduction steps    
     def prep4cst(self,settings):
         
         # let's collate the data from all individual segments into single arrays
@@ -200,9 +269,6 @@ class nameless(object):
         
         self.data_s2, self.err_s2, self.dq_s2 = data, err, dq 
         self.t_int = t_int
-        
-        #TODO: save these arrays
-        #np.save(self.prep_dir+'/dq_array.npy',self.dq_s2)
         
         self.pwcpos = pwcpos
         
@@ -213,10 +279,11 @@ class nameless(object):
         # computing median stack of the stage 2 data
         self.medstack_s2 = np.nanmedian(self.data_s2,axis=0)
         
-        #TODO: Also save median stack and rough white light curve
+        # saving median stack and rough white light curve
+        np.savetxt('stage2_median_stack.txt',self.medstack_s2)
         
         # saving a figure of the median stack
-        if settings['plotting']: #TODO: could even make a figure for plotting 2D images like this, if we repeat it often enough
+        if settings['plotting']: 
             fig, ax = plt.subplots(1,1,figsize=(8,5))
             ax.imshow(self.medstack_s2,aspect='auto',vmin=0,vmax=np.nanmax(self.medstack_s2)/10)
             
@@ -232,6 +299,8 @@ class nameless(object):
         
         self.rough_wlc = np.nansum(cut_data,axis=(1,2))
         self.rough_wlc/= np.nanmedian(self.rough_wlc)
+        
+        np.savetxt('rough_white_light_curve.txt',self.rough_wlc)
         
         if settings['plotting']: 
             fig, ax = plt.subplots(1,1,figsize=(8,6))
@@ -265,8 +334,6 @@ class nameless(object):
             data_file = direc+'/'+self.obs_handle+'-seg'+seg+'_nis_1_'+filetype+'.fits'
             dm = datamodels.open(data_file)
             
-            #TODO: keep metadata?
-            
             if i==0:
                 data, err, dq  = dm.data, dm.err, dm.dq
                 t_int  = dm.int_times['int_mid_BJD_TDB'] # getting mid-integration times in BJD_TDB
@@ -282,15 +349,13 @@ class nameless(object):
                 t_int  = np.concatenate((t_int,dm.int_times['int_mid_BJD_TDB']))
                   
         return data, err, dq, t_int, pwcpos
-        #TODO: pwcpos and other important infos could be stored earlier on, to think about
 
     # function that takes the cleaned data (after custom steps) and puts them back into
     # its constituent segments before saving as jwst datamodels on disk
-    def saveclean(self):
+    def saveclean(self,cleanfiletype='clean'):
         direc = self.s2_red_dir
         filetype = 'sourcetypestep'
         cleandirec = self.cst_dir
-        cleanfiletype = 'clean'
 
         i0 = 0 # counter of the current integration within the self data container
         for i, seg in enumerate(self.segs):
@@ -334,6 +399,9 @@ class nameless(object):
         self.wave_o2      = self.wave_o2[np.where((trace_o2.x>=settings['xmin_o2'])&(trace_o2.x<=settings['xmax_o2']))]
         self.pasta_trace2 = self.pasta_trace2[:,np.where((trace_o2.x>=settings['xmin_o2'])&(trace_o2.x<=settings['xmax_o2']))[0]]
     
+        np.savetxt(self.prep_dir+'/wave_solution_order1.txt',self.wave_o1)
+        np.savetxt(self.prep_dir+'/wave_solution_order2.txt',self.wave_o2)
+    
     
     def get_trace_pos(self,settings): #method='CCF',sampfac=100,nknots1=11,nknots2=7,plotting=True,dpi=300):
         
@@ -344,11 +412,13 @@ class nameless(object):
             self.trace1 = self.pasta_trace1
             self.trace2 = self.pasta_trace2
             
+            x_o1, x_o2 = self.trace1[0], self.trace2[0]
+            
             y_o1, y_o1_smooth = self.trace1[1], self.trace1[1]
             y_o2, y_o2_smooth = self.trace2[1], self.trace2[1]
             
         # doing cross-correlation with a reference trace profile
-        elif method=='CCF': #TODO: this should be a separate function
+        elif method=='CCF':
             SP = fits.open(self.ancil_dir+'/jwst_niriss_specprofile_0022.fits')
             ST = fits.open(self.ancil_dir+'/jwst_niriss_spectrace_0023.fits')
             
@@ -362,7 +432,7 @@ class nameless(object):
             ind_ref = 2038 # column # 2038, could be any of them
             mod_col = trace_prof1[:,ind_ref] 
             abs_pos = ST[1].data['Y'][np.argmin(np.abs(ST[1].data['X']-ind_ref-0.5))]
-            #TODO: could also use each column of the model trace for each column of the detector
+            #TODO: could also test using each column of the model trace for each column of the detector
             
             y      = np.arange(len(mod_col)) + 0.5
             y_fine = np.linspace(0,len(mod_col),len(mod_col)*sampfac)
@@ -394,11 +464,10 @@ class nameless(object):
             
             
             # smoothing the profile, adapted from transitspectroscopy package routine
-            #TODO: define xvals from pasta_trace1, cleaner
-            xend, xstart = self.pasta_trace1[0,0], self.pasta_trace1[0,-1]
+            xend, xstart = x_o1[0], x_o1[-1]
             
             knots = np.arange(xend,xstart, (xstart - xend) / np.double(nknots1))[1:]
-            tck   = interpolate.splrep(np.double(self.pasta_trace1[0]),y_o1, t=knots)
+            tck   = interpolate.splrep(np.double(x_o1),y_o1, t=knots)
             
             y_o1_smooth = interpolate.splev(self.pasta_trace1[0], tck)
                 
@@ -406,7 +475,7 @@ class nameless(object):
             # repeating the same thing for order 2
             y_o2 = np.zeros(self.wave_o2.size)
             
-            for i,x in enumerate(self.pasta_trace2[0]):
+            for i,x in enumerate(x_o2):
                 data_col = np.copy(self.medstack_s2[:,int(x)])
                 
                 data_col[0:int(self.pasta_trace2[1,i]-30)]  = np.nanmedian(self.medstack_s2[:,int(x)])
@@ -425,19 +494,20 @@ class nameless(object):
                 
             y_o2 += abs_pos
             
-            xend, xstart = self.pasta_trace2[0,0], self.pasta_trace2[0,-1]
+            xend, xstart = x_o2[0], x_o2[-1]
             
             knots = np.arange(xend,xstart, (xstart - xend) / np.double(nknots2))[1:]
-            tck   = interpolate.splrep(np.double(self.pasta_trace2[0]),y_o2, t=knots)
+            tck   = interpolate.splrep(np.double(x_o2),y_o2, t=knots)
             
-            y_o2_smooth = interpolate.splev(self.pasta_trace2[0], tck)           
+            y_o2_smooth = interpolate.splev(x_o2, tck)           
         
             
-            #TODO: again, set arrays of x1 and x2 instead of always calling pasta_trace
-            self.trace1 = np.array([self.pasta_trace1[0],y_o1_smooth])
-            self.trace2 = np.array([self.pasta_trace2[0],y_o2_smooth])
+            self.trace1 = np.array([x_o1,y_o1_smooth])
+            self.trace2 = np.array([x_o2,y_o2_smooth])
             
-            #TODO: also save these arrays as .txt files
+            np.savetxt(self.prep_dir+'/trace_position_order1.txt',self.trace1)
+            np.savetxt(self.prep_dir+'/trace_position_order2.txt',self.trace2)
+            
             SP.close()
             ST.close()
             
@@ -447,7 +517,6 @@ class nameless(object):
             pdb.set_trace()
             
             
-        #TODO: put at the end of the function
         if settings['plotting']:
             fig, ax = plt.subplots(1,1,figsize=(8,6))
 
@@ -461,7 +530,6 @@ class nameless(object):
             fig.savefig(self.prep_dir+'/trace_positions.pdf',dpi=settings['dpi'])
             plt.close(fig)
     
-    #TODO: all the data reduction functions should be callable without using the nameless function
     
     def badpixcorr(self,settings):
         
@@ -476,7 +544,6 @@ class nameless(object):
         
         #TO-DO: save outlier map (med_dq) for reference
         for i in range(len(data)):
-            #TODO: take out step counting, or change for something that looks better
             print('\rBad Pixel Step: '+str(i+1)+'/'+str(len(data)),end='')
             
             # integration to be corrected
@@ -489,15 +556,12 @@ class nameless(object):
             inds_bp    = np.where((med_dq==1) | (np.isnan(corr_int))) # indices of bad pixels
             y_bp, x_bp = inds_bp
             
-            #TODO: check if this is needed
-            #corr_int[inds_bp] = -1e3 # set bad pixels to some arbitary non-NaN value
-            
             corr_int[inds_bp] = interpolate.griddata((x_gp,y_gp),z_gp,(x_bp,y_bp),method=settings['interp_bp'],fill_value=0.)
             
             data_corr[i] = corr_int
             
         #TODO: add option to set flags of corrected pixels back to 0, if we trust them
-        # would also require to look how to fix the errors as well
+        # would also require to look at how to fix the errors as well
         
         if settings['plotting']:
             fig, axes = plt.subplots(1,2,figsize=(12,5))
@@ -513,6 +577,8 @@ class nameless(object):
             plt.close(fig)
         
         self.data_cst, self.err_cst, self.dq_cst = data_corr, self.err_s2, self.dq_s2
+        
+        
     
     
     def bg_corr(self,settings):
@@ -596,7 +662,7 @@ class nameless(object):
         
         stdev = stats.iqr(resids,rng=(16,84),axis=0)/2.
         
-        #TODO: also save array that corresponds to the CR flags, and update DQs
+        #TODO: could also save array that corresponds to the CR flags, and update DQs
         nsig = settings['nsig_CR']
         data[np.where(np.abs(resids)>nsig*stdev)] = running_median[np.where(np.abs(resids)>nsig*stdev)]
 
@@ -628,17 +694,13 @@ class nameless(object):
 
 
     def oneoverf(self,settings):
-        
-        #TODO: clean up this function
-
         #TODO: add option to consider a different median stack as a function of time (in case of tilt event)
         
         median_ints = np.arange(settings['median_ints'][0],settings['median_ints'][1])
 
         med_stack = np.nanmedian(self.data_cst[median_ints],axis=0)[np.newaxis]
 
-        #TODO: fix so that we also have err_cst and dq_cst values
-        data, err, dq = np.copy(self.data_cst), np.copy(self.err_s2), np.copy(self.dq_s2)
+        data, err, dq = np.copy(self.data_cst), np.copy(self.err_cst), np.copy(self.dq_cst)
 
         err[dq!=0]         = np.inf # setting all errors of pixels with non zero dq flags to infinity
         err[np.isnan(err)] = np.inf # setting error values that are nan or 0 to infinity
@@ -787,12 +849,18 @@ class nameless(object):
             fig.savefig(self.cst_dir+'/1overf_noise_correction.pdf',dpi=settings['dpi'])
             print('Produced and saved figure')
             plt.close()
+            
+        #np.save(self.cst_dir+'/scaling_order1.npy',slope)
+        #np.save(self.cst_dir+'/1f_order1.npy',intercept)
+        
+        #np.save(self.cst_dir+'/scaling_order2.npy',slope2)
+        #np.save(self.cst_dir+'/1f_order2.npy',intercept2)
         
 
     
     def extraction(self,settings):
         
-        data, err, dq = np.copy(self.data_cst), np.copy(self.err_s2), np.copy(self.dq_s2)
+        data, err, dq = np.copy(self.data_cst), np.copy(self.err_cst), np.copy(self.dq_cst)
         
         #TODO: include option to not consider pixels with dq flags in extraction
         
@@ -945,8 +1013,5 @@ class nameless(object):
         else:
             return flux
         
-    # add loading and saving functions for the nameless object
-    
-    # add create folders function 
-    
-    # have a function to do PCA
+        
+    #TODO: have a function to do PCA
