@@ -6,7 +6,8 @@ This framework is currently only adapted for NIRISS SOSS observations, with plan
 Installation instructions:
   1. Clone this directory and create your personal branch
   2. Create a conda environment in which you will run your NAMELESS reductions. The pipeline has been tested on Python 3.13.
-  3. In the NAMELESS/ directory, run ./install.sh in your terminal to install the package.
+  3. pip install setuptools.
+  4. In the NAMELESS/ directory, run ./install.sh in your terminal to install the package.
 
 How to use it:
 In the NAMELESS/Observations/ directory, create a folder that will contain the _uncal.fits files for your observations.
