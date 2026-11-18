@@ -10,9 +10,10 @@ Installation instructions:
   4. In the NAMELESS/ directory, run ./install.sh in your terminal to install the package.
 
 How to use it:
-In the NAMELESS/Observations/ directory, create a folder that will contain the _uncal.fits files for your observations.
-In the NAMELESS/ folder, copy the example_config.yml file and create one for the specific reduction you want to do.
-All settings in the .yml file are explained, and feel free to vary them to see how they impact the reduction!
+  1. In the NAMELESS/Observations/ directory, create a folder that will contain the _uncal.fits files for your observations.
+  2. In the NAMELESS/ folder, copy the example_config.yml file and create one for the specific reduction you want to do.
+  3. Once you're done playing with the .yml file, save it and run in the terminal: python run_nameless.py yourplanet_config.yml
+  4. All settings in the .yml file are explained, and feel free to vary them to see how they impact the reduction!
 
 The end result of a full reduction is a .fits file containing the 2D stellar spectra and other relevant outputs.
 
