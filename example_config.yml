@@ -61,9 +61,9 @@ cst_settings:
     oneoverf:    true # 1/f correction
     
     # the intermediate steps to be saved
-    badpixcorr_save:  true
-    bg_corr_save:     true
-    cosmic_rays_save: true
+    badpixcorr_save:  false
+    bg_corr_save:     false
+    cosmic_rays_save: false
 
     # Bad pixel correction
     frac_int:   0.5      # Fraction of flagged integrations needed for a pixel to be considered bad
@@ -83,7 +83,7 @@ cst_settings:
     
     # 1/f correction 
     ap_1f:       30      # size of aperture RADIUS used to compute the 1/f values
-    median_ints: [0,200] # range of integrations used to compute median columns [int_min,int_max]
+    median_ints: [0,200] # range of integrations used to compute median columns [int_min,int_max], ideally these would be integrations that are out of transit
 
     plotting: true  # Produce and save the diagnostics plots
     dpi:      300   # dpi of the figures
