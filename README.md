@@ -3,7 +3,7 @@ Data reduction pipeline for JWST time series observations.
 
 This framework is currently only adapted for NIRISS SOSS observations, with plans to expand it to other instrument modes in the future.
 
-If you use this package in your work, please cite Coulombe et al. 2023 (ui.adsabs.harvard.edu/abs/2023Natur.620..292C/abstract) and Coulombe et al. 2025a (https://scixplorer.org/abs/2025NatAs...9..512C/abstract).
+If you use this package in your work, please cite Coulombe et al. 2023 (https://scixplorer.org/abs/2023Natur.620..292C/abstract) and Coulombe et al. 2025a (https://scixplorer.org/abs/2025NatAs...9..512C/abstract).
 
 Installation instructions:
   1. Clone this directory and create your personal branch
