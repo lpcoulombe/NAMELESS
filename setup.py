@@ -22,51 +22,6 @@ AUX_DIR  = ROOT_DIR / "Auxiliary"
 for directory in [DATA_DIR, AUX_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
-
-# Files to download
-FILES = {
-    "opacity_table.dat":
-        "https://raw.githubusercontent.com/USERNAME/REPOSITORY/main/my_package_data/opacity_table.dat",
-
-    "chemical_equilibrium.dat":
-        "https://raw.githubusercontent.com/USERNAME/REPOSITORY/main/my_package_data/chemical_equilibrium.dat",
-
-    "stellar_spectra.dat":
-        "https://raw.githubusercontent.com/USERNAME/REPOSITORY/main/my_package_data/stellar_spectra.dat",
-}
-
-
-def download_files():
-    """Download required data files from GitHub."""
-
-    for filename, url in FILES.items():
-
-        destination = AUX_DIR / filename
-
-        if destination.exists():
-            print(f"{filename} already exists. Skipping.")
-            continue
-
-        print(f"Downloading {filename}...")
-
-        urllib.request.urlretrieve(url, destination)
-
-        print(f"Downloaded: {destination}")
-
-
-class DownloadData(Command):
-    """Custom command to download package data."""
-
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        download_files()
     
 # Package installation
 setup(
@@ -78,7 +33,8 @@ setup(
           "scipy",
           "matplotlib",
           "astropy",
-          "jwst"],
+          "jwst",
+          "pastasoss"],
       cmdclass={"download_data": DownloadData,})
 
 
