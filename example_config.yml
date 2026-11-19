@@ -55,9 +55,9 @@ prep_settings:
 
 cst_settings:
     # the correction steps to be ran
-    badpixcorr:  false # bad pixel flagging and correction
-    bg_corr:     false # background subtraction
-    cosmic_rays: false # cosmic ray flagging and correction
+    badpixcorr:  true # bad pixel flagging and correction
+    bg_corr:     true # background subtraction
+    cosmic_rays: true # cosmic ray flagging and correction
     oneoverf:    true # 1/f correction
     
     # the intermediate steps to be saved

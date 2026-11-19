@@ -126,36 +126,36 @@ class nameless(object):
             self.cst_status[step] = False
 
 
-def make_folders(self):
-    if not os.path.exists(self.red_dir):
-        print('Creating folder for reduction outputs')
-        os.makedirs(self.red_dir)
-        
-    # creating stage 1 and 2 output folders if they don't exist
-    self.s1_red_dir = self.red_dir+'/stage1_outputs'
-    if not os.path.exists(self.s1_red_dir):
-        print('Creating folder for stage 1 reduction outputs')
-        os.makedirs(self.s1_red_dir)
-        
-    self.s2_red_dir = self.red_dir+'/stage2_outputs'
-    if not os.path.exists(self.s2_red_dir):
-        print('Creating folder for stage 2 reduction outputs')
-        os.makedirs(self.s2_red_dir)
-        
-    self.prep_dir = self.red_dir+'/prep_step_outputs'
-    if not os.path.exists(self.prep_dir):
-        print('Creating folder containing products needed for custom steps')
-        os.makedirs(self.prep_dir)
-        
-    self.cst_dir = self.red_dir+'/custom_steps_outputs'
-    if not os.path.exists(self.cst_dir):
-        print('Creating folder containing custom steps outputs')
-        os.makedirs(self.cst_dir)
-        
-    self.ext_dir = self.red_dir+'/extraction_outputs'
-    if not os.path.exists(self.ext_dir):
-        print('Creating folder containing extraction outputs')
-        os.makedirs(self.ext_dir)
+    def make_folders(self):
+        if not os.path.exists(self.red_dir):
+            print('Creating folder for reduction outputs')
+            os.makedirs(self.red_dir)
+            
+        # creating stage 1 and 2 output folders if they don't exist
+        self.s1_red_dir = self.red_dir+'/stage1_outputs'
+        if not os.path.exists(self.s1_red_dir):
+            print('Creating folder for stage 1 reduction outputs')
+            os.makedirs(self.s1_red_dir)
+            
+        self.s2_red_dir = self.red_dir+'/stage2_outputs'
+        if not os.path.exists(self.s2_red_dir):
+            print('Creating folder for stage 2 reduction outputs')
+            os.makedirs(self.s2_red_dir)
+            
+        self.prep_dir = self.red_dir+'/prep_step_outputs'
+        if not os.path.exists(self.prep_dir):
+            print('Creating folder containing products needed for custom steps')
+            os.makedirs(self.prep_dir)
+            
+        self.cst_dir = self.red_dir+'/custom_steps_outputs'
+        if not os.path.exists(self.cst_dir):
+            print('Creating folder containing custom steps outputs')
+            os.makedirs(self.cst_dir)
+            
+        self.ext_dir = self.red_dir+'/extraction_outputs'
+        if not os.path.exists(self.ext_dir):
+            print('Creating folder containing extraction outputs')
+            os.makedirs(self.ext_dir)
 
             
         
@@ -280,7 +280,7 @@ def make_folders(self):
         self.medstack_s2 = np.nanmedian(self.data_s2,axis=0)
         
         # saving median stack and rough white light curve
-        np.savetxt('stage2_median_stack.txt',self.medstack_s2)
+        np.savetxt(self.prep_dir+'/stage2_median_stack.txt',self.medstack_s2)
         
         # saving a figure of the median stack
         if settings['plotting']: 
@@ -300,7 +300,7 @@ def make_folders(self):
         self.rough_wlc = np.nansum(cut_data,axis=(1,2))
         self.rough_wlc/= np.nanmedian(self.rough_wlc)
         
-        np.savetxt('rough_white_light_curve.txt',self.rough_wlc)
+        np.savetxt(self.prep_dir+'/rough_white_light_curve.txt',self.rough_wlc)
         
         if settings['plotting']: 
             fig, ax = plt.subplots(1,1,figsize=(8,6))
@@ -419,6 +419,8 @@ def make_folders(self):
             
         # doing cross-correlation with a reference trace profile
         elif method=='CCF':
+            x_o1, x_o2 = self.pasta_trace1[0], self.pasta_trace2[0]
+            
             SP = fits.open(self.ancil_dir+'/jwst_niriss_specprofile_0022.fits')
             ST = fits.open(self.ancil_dir+'/jwst_niriss_spectrace_0023.fits')
             
