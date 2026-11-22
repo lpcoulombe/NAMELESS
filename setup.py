@@ -34,8 +34,7 @@ setup(
           "matplotlib",
           "astropy",
           "jwst",
-          "pastasoss"],
-      cmdclass={"download_data": DownloadData,})
+          "pastasoss"])
 
 
 
